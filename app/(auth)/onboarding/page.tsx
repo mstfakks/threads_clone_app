@@ -4,9 +4,9 @@ import { currentUser } from "@clerk/nextjs";
 export default async function Page() {
   const user = await currentUser();
 
-  const userInfo: any = {};
+  const userInfo = {};
 
-  const userData: any = {
+  const userData = {
     id: user?.id,
     objectId: userInfo?._id,
     userName: userInfo?.userName || user?.username,
