@@ -14,13 +14,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "../ui/button";
 import { z } from "zod";
 import { Textarea } from "../ui/textarea";
+import { useOrganization } from "@clerk/nextjs";
 //import { updateUser } from "@/lib/actions/user.actions";
 import { usePathname, useRouter } from "next/navigation";
 import { ThreadValidation } from "@/lib/validations/thread";
 import { createThread } from "@/lib/actions/thread.actions";
+
 export default function PostThread({ userId }: { userId: string }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { organization } = useOrganization();
 
   const form = useForm({
     resolver: zodResolver(ThreadValidation),
@@ -34,7 +37,7 @@ export default function PostThread({ userId }: { userId: string }) {
     await createThread({
       text: values.thread,
       author: userId,
-      communityId: null,
+      communityId: organization ? organization.id : null,
       path: pathname,
     });
     router.push("/");

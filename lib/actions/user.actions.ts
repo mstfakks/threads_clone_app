@@ -1,12 +1,28 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import User from "../models/user.model";
-import { connectToDB } from "../mongoose";
-import Thread from "../models/thread.model";
 import { FilterQuery, SortOrder } from "mongoose";
+import { revalidatePath } from "next/cache";
 
-interface UserParams {
+import Community from "../models/community.model";
+import Thread from "../models/thread.model";
+import User from "../models/user.model";
+
+import { connectToDB } from "../mongoose";
+
+export async function fetchUser(userId: string) {
+  try {
+    connectToDB();
+
+    return await User.findOne({ id: userId }).populate({
+      path: "communities",
+      model: Community,
+    });
+  } catch (error: any) {
+    throw new Error(`Failed to fetch user: ${error.message}`);
+  }
+}
+
+interface Params {
   userId: string;
   username: string;
   name: string;
@@ -15,24 +31,17 @@ interface UserParams {
   path: string;
 }
 
-interface FetchUsersParams {
-  userId: string;
-  searchString?: string;
-  pageNumber?: number;
-  pageSize?: number;
-  sortBy?: SortOrder;
-}
-
 export async function updateUser({
   userId,
-  username,
-  name,
   bio,
-  image,
+  name,
   path,
-}: UserParams): Promise<void> {
-  connectToDB();
+  username,
+  image,
+}: Params): Promise<void> {
   try {
+    connectToDB();
+
     await User.findOneAndUpdate(
       { id: userId },
       {
@@ -44,46 +53,43 @@ export async function updateUser({
       },
       { upsert: true }
     );
+
     if (path === "/profile/edit") {
       revalidatePath(path);
     }
-  } catch (err: any) {
-    throw new Error(`Failed to create/update user: ${err.message}`);
+  } catch (error: any) {
+    throw new Error(`Failed to create/update user: ${error.message}`);
   }
 }
 
-export async function fetchUser(userId: string) {
+export async function fetchUserPosts(userId: string) {
   try {
     connectToDB();
 
-    return await User.findOne({ id: userId }); /* .populate({
-      path: "communities",
-      model: Community
-    }) */
-  } catch (err: any) {
-    throw new Error(`Failed to fetch user: ${err.message}`);
-  }
-}
-
-export async function fetchUserThreads(userId: string) {
-  try {
-    connectToDB();
     const threads = await User.findOne({ id: userId }).populate({
       path: "threads",
       model: Thread,
-      populate: {
-        path: "children",
-        model: Thread,
-        populate: {
-          path: "author",
-          model: User,
-          select: "name image id",
+      populate: [
+        {
+          path: "community",
+          model: Community,
+          select: "name id image _id",
         },
-      },
+        {
+          path: "children",
+          model: Thread,
+          populate: {
+            path: "author",
+            model: User,
+            select: "name image id",
+          },
+        },
+      ],
     });
     return threads;
-  } catch (error: any) {
-    throw new Error(`Failed to fetch user threads: ${error.message}`);
+  } catch (error) {
+    console.error("Error fetching user threads:", error);
+    throw error;
   }
 }
 
@@ -93,10 +99,18 @@ export async function fetchUsers({
   pageNumber = 1,
   pageSize = 20,
   sortBy = "desc",
-}: FetchUsersParams) {
+}: {
+  userId: string;
+  searchString?: string;
+  pageNumber?: number;
+  pageSize?: number;
+  sortBy?: SortOrder;
+}) {
   try {
     connectToDB();
+
     const skipAmount = (pageNumber - 1) * pageSize;
+
     const regex = new RegExp(searchString, "i");
 
     const query: FilterQuery<typeof User> = {
@@ -124,17 +138,19 @@ export async function fetchUsers({
     const isNext = totalUsersCount > skipAmount + users.length;
 
     return { users, isNext };
-  } catch (error: any) {
-    throw new Error(`Failed to fetch users: ${error.message}`);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    throw error;
   }
 }
 
 export async function getActivity(userId: string) {
   try {
     connectToDB();
+
     const userThreads = await Thread.find({ author: userId });
 
-    const childThreadIds: string[] = userThreads.reduce((acc, userThread) => {
+    const childThreadIds = userThreads.reduce((acc, userThread) => {
       return acc.concat(userThread.children);
     }, []);
 
@@ -148,7 +164,8 @@ export async function getActivity(userId: string) {
     });
 
     return replies;
-  } catch (error: any) {
-    throw new Error(`Failed to fetch activity: ${error.message}`);
+  } catch (error) {
+    console.error("Error fetching replies: ", error);
+    throw error;
   }
 }
